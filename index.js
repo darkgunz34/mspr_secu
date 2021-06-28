@@ -4,15 +4,23 @@ const bodyParser = require('body-parser');
 const express = require('express');
 const speakeasy = require('speakeasy');
 const server = express();
+const bcrypt = require('bcrypt');
+//const salt = 10;
+var userAttempts = 1;
+var mysql = require('mysql');
+var con = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "mspr_secu"
+});
 
 server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
 
 var secret = speakeasy.generateSecret();
 var secretTemp = secret.base32;
-
 var QRCode = require('qrcode');
-
 
 
 server.get('/', (req, res) => {
@@ -30,18 +38,55 @@ server.get('/authentification/', (req, res) => {
 });
 
 server.post('/login', function(req, res){
+  var userIp = req.ip;
   var nom = req.body.name;
   var password = req.body.password;
   var corrompu = fnpwnedpasswords(password);
+  // vérifier si l'ip est bannis
+    con.connect(function(err) {
+        var query = "SELECT * FROM brute_force WHERE ip_user = ?";
+        var values = userIp;
+        con.query(query,values, function(err, result) {
+            if(err) throw err;
+            if(result.length > 0) {
+                res.render('ban');
+            }
+        });
+    });
 
-  //res.render('login',{name:nom,password:password,corrompu:corrompu});
-    // renvoie sur la page de validation
-  res.render('check');
+    // récuperer le mot de passe sauvegarder pour vérification
+    con.connect(function(err) {
+        var query = "SELECT * FROM user WHERE identifiant = ?";
+        var values = nom;
+        con.query(query,values, function(err, result) {
+            if(err) throw err;
+           if(result.length > 0) {
+               bcrypt.compare(password, hash, function(err, result) {
+                   if(result) {
+                        res.render('check');
+                   } else {
+                       if(userAttempts > 5) {
+                           /*con.connect(function(err) {
+                                TO DO : lorsque la connexion echoue, stoker l'attemps + le time stamp
+                                si la connexion echoue encore une fois, même process + verification du delta entre les deux attemps
+                                au bout de 5 fois verifier les delta et si ces derniers sont proche (ms) declencher le ban
+                           });*/
+                           res.render('ban')
+                       } else {
+                           userAttempts++
+                           console.log("mot de passe incorrect !");
+                           console.log(userAttempts);
+                       }
+                   }
+               })
+           }
+        });
+    });
 });
 
 // process de validation speakeasy TwoFactor
 server.post('/check', function(req, res) {
-    var code = req.body.code; // récupération du code entrez par l'utilisateur
+    var code = req.body.code; // récupération du code entré par l'utilisateur
     var verified = speakeasy.totp.verify({
         secret : secretTemp,
         encoding: 'base32',
@@ -101,4 +146,12 @@ function fnpwnedpasswords(password){
     while(sync) {require('deasync').sleep(100);}
     return corrompu;
 };
+
+/*
+* bcrypt.genSalt(salt, function(err, salt) {
+            bcrypt.hash('mot_de_passe_user', salt, function(err, hash) {
+                console.log(hash);
+            });
+        });
+* */
 
