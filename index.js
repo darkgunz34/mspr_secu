@@ -2,30 +2,58 @@ const https = require('https');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const express = require('express');
-
+const speakeasy = require('speakeasy');
 const server = express();
-
 
 server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
 
+var secret = speakeasy.generateSecret();
+var secretTemp = secret.base32;
+
+var QRCode = require('qrcode');
+
+
+
 server.get('/', (req, res) => {
-  res.render('authentification');
+    QRCode.toDataURL(secret.otpauth_url, function(err, data_url) {
+        // ajout de l'image à scanner
+        res.render('authentification', { img : '<img src="' + data_url + '">'});
+    })
 });
 
 server.get('/authentification/', (req, res) => {
-  res.render('authentification');
+    QRCode.toDataURL(secret.otpauth_url, function(err, data_url) {
+        // ajout de l'image à scanner
+        res.render('authentification', { img : '<img src="' + data_url + '">'});
+    })
 });
 
 server.post('/login', function(req, res){
   var nom = req.body.name;
   var password = req.body.password;
-
   var corrompu = fnpwnedpasswords(password);
 
-  console.log('nom :' + nom + " " + req);
-  res.render('login',{name:nom,password:password,corrompu:corrompu});
+  //res.render('login',{name:nom,password:password,corrompu:corrompu});
+    // renvoie sur la page de validation
+  res.render('check');
 });
+
+// process de validation speakeasy TwoFactor
+server.post('/check', function(req, res) {
+    var code = req.body.code; // récupération du code entrez par l'utilisateur
+    var verified = speakeasy.totp.verify({
+        secret : secretTemp,
+        encoding: 'base32',
+        token: code
+    });
+    // verification
+    if(verified) {
+        res.render('success.ejs');
+    } else {
+        console.log("et non gros connard");
+    }
+})
 
 server.listen(4242, () => {
   console.log('Express Server is running...');
