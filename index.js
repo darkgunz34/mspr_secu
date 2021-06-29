@@ -21,8 +21,8 @@ let transport = mailer.createTransport( {
     host: 'smtp-mail.outlook.com',
     port: 587,
     auth: {
-        user: 'georges.garnier@epsi.fr',
-        pass: '463GGT'
+        user: '',
+        pass: ''
     }
 });
 
