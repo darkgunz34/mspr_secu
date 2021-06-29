@@ -4,8 +4,9 @@ const bodyParser = require('body-parser');
 const express = require('express');
 const speakeasy = require('speakeasy');
 const server = express();
+const mailer = require('nodemailer');
 const bcrypt = require('bcrypt');
-//const salt = 10;
+const salt = 10;
 var bruteTemp = [];
 var bruteDelta = [];
 var userAttempts = 1;
@@ -16,6 +17,20 @@ var con = mysql.createConnection({
     password: "",
     database: "mspr_secu"
 });
+let transport = mailer.createTransport( {
+    host: 'smtp-mail.outlook.com',
+    port: 587,
+    auth: {
+        user: 'georges.garnier@epsi.fr',
+        pass: '463GGT'
+    }
+});
+
+/*bcrypt.genSalt(salt, function(err, salt) {
+    bcrypt.hash('test', salt, function(err, hash) {
+        console.log(hash);
+    });
+});*/
 
 server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
@@ -61,11 +76,15 @@ server.post('/login', function(req, res){
         var query = "SELECT * FROM user WHERE identifiant = ?";
         var values = nom;
         con.query(query,values, function(err, result) {
+            var email = result[0].email;
+            console.log(email);
+            console.log(result);
             if(err) console.log(err);
            if(result.length > 0) {
-               bcrypt.compare(password, result['password'], function(err2, result2) {
+               bcrypt.compare(password, '$2b$10$DhI6OqPR78YyLH6Rck6mG.n7YDrNXx9lY0SavKkpsl5kIEMHtbU3u', function(err2, result2) {
+                   sendMail(email);
                    if(result2) {
-                        res.render('check');
+                       res.render('check');
                    } else {
                        if(userAttempts > 5) {
                            let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0)
@@ -161,6 +180,25 @@ function fnpwnedpasswords(password){
     return corrompu;
 };
 
+function sendMail(email) {
+    // recup l'email
+    //creer le corps
+    const message = {
+        from: 'georges.garnier1@gmail.com',
+        to: email,
+        subject: 'Tentative de connexion',
+        text: 'Hey ta tenté de te connecte non ?'
+    };
+
+    //envoyer
+    transport.sendMail(message, function(err, result) {
+        if(err) {
+            console.log(err)
+        } else {
+            console.log(result)
+        }
+    });
+}
 /*
 * bcrypt.genSalt(salt, function(err, salt) {
             bcrypt.hash('mot_de_passe_user', salt, function(err, hash) {
