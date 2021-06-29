@@ -6,6 +6,8 @@ const speakeasy = require('speakeasy');
 const server = express();
 const bcrypt = require('bcrypt');
 //const salt = 10;
+var bruteTemp = [];
+var bruteDelta = [];
 var userAttempts = 1;
 var mysql = require('mysql');
 var con = mysql.createConnection({
@@ -43,12 +45,12 @@ server.post('/login', function(req, res){
   var password = req.body.password;
   var corrompu = fnpwnedpasswords(password);
   // vérifier si l'ip est bannis
-    con.connect(function(err) {
+    con.connect(function(err1) {
         var query = "SELECT * FROM brute_force WHERE ip_user = ?";
         var values = userIp;
-        con.query(query,values, function(err, result) {
-            if(err) throw err;
-            if(result.length > 0) {
+        con.query(query,values, function(err1, result1) {
+            if(err1) throw err1;
+            if(result1.length > 0) {
                 res.render('ban');
             }
         });
@@ -59,20 +61,32 @@ server.post('/login', function(req, res){
         var query = "SELECT * FROM user WHERE identifiant = ?";
         var values = nom;
         con.query(query,values, function(err, result) {
-            if(err) throw err;
+            if(err) console.log(err);
            if(result.length > 0) {
-               bcrypt.compare(password, hash, function(err, result) {
-                   if(result) {
+               bcrypt.compare(password, result['password'], function(err2, result2) {
+                   if(result2) {
                         res.render('check');
                    } else {
                        if(userAttempts > 5) {
-                           /*con.connect(function(err) {
-                                TO DO : lorsque la connexion echoue, stoker l'attemps + le time stamp
-                                si la connexion echoue encore une fois, même process + verification du delta entre les deux attemps
-                                au bout de 5 fois verifier les delta et si ces derniers sont proche (ms) declencher le ban
-                           });*/
+                           let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0)
+                           let dateBan = new Date().toISOString().slice(0,19).replace('T', ' ');
+                           if(( arrayTimeStampSum / (bruteDelta.length - 1)) <= 500) {
+                               let query2 = "INSERT INTO brute_force(ip_user, date_ban) VALUES ( ?, ?)";
+                               let values2 = [userIp, dateBan];
+                               con.query(query2, values2, function(err3, result3){
+                                   if(err3) {
+                                       console.log(err3);
+                                   }
+                               });
+                           }
                            res.render('ban')
                        } else {
+                           let timeStamp = Date.now();
+                           if(bruteTemp.length > 0) {
+                               bruteDelta.push(timeStamp - bruteTemp[bruteTemp.length -1]);
+                               console.log(bruteDelta);
+                           }
+                           bruteTemp.push(timeStamp);
                            userAttempts++
                            console.log("mot de passe incorrect !");
                            console.log(userAttempts);
