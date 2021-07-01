@@ -19,11 +19,11 @@ let con = mysql.createConnection({
 });
 //setup emailer data
 let transport = mailer.createTransport( {
-    host: 'smtp.mailtrap.io',
+    host: '',
     port: 2525,
     auth: {
-        user: '1d6d2281b77d70',
-        pass: '8681af2be1073d'
+        user: '',
+        pass: ''
     }
 });
 // get qrCode and secret from db
@@ -49,10 +49,10 @@ server.get('/authentification/', (req, res) => {
 });
 
 server.post('/login', function(req, res){
-  var userIp = req.ip;
-  var nom = req.body.name;
-  var password = req.body.password;
-  var corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
+  let userIp = req.ip;
+  let nom = req.body.name;
+  let password = req.body.password;
+  let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
   tools.checkIfIpIsBan(con, userIp, res); // if ban renvoi sur ban.ejs
   tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res); // if good renvoie sur check.ejs
     if(userAttempts > 5) {
@@ -66,9 +66,8 @@ server.post('/login', function(req, res){
             console.log(bruteDelta);
         }
         bruteTemp.push(timeStamp);
-        userAttempts++
-        console.log("mot de passe incorrect !");
         console.log(userAttempts);
+        userAttempts++
     }
     // TO DO envoie mail changement de navigateur et changement d'ip
 });
