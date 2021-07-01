@@ -1,35 +1,42 @@
 const https = require('https');
+const fs = require('fs');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
+const certPath = '/etc/letsencrypt/live/chateletmspr.ovh';
+const privateKey = fs.readFileSync(`${certPath}/privkey.pem`);
+const certificate = fs.readFileSync(`${certPath}/fullchain.pem`);
+const port = 4242;
+const credentials = {key: privateKey, cert: certificate};
 const express = require('express');
-
 const server = express();
+const app = https.createServer(credentials, server);
 
+app.listen(port, () => {
+    console.log('Express Server is running...');
+});
 
 server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
 
 server.get('/', (req, res) => {
-  res.render('authentification');
+    res.render('authentification');
 });
 
 server.get('/authentification/', (req, res) => {
-  res.render('authentification');
+    res.render('authentification');
 });
 
 server.post('/login', function(req, res){
-  var nom = req.body.name;
-  var password = req.body.password;
+    var nom = req.body.name;
+    var password = req.body.password;
 
-  var corrompu = fnpwnedpasswords(password);
+    var corrompu = fnpwnedpasswords(password);
 
-  console.log('nom :' + nom + " " + req);
-  res.render('login',{name:nom,password:password,corrompu:corrompu});
+    console.log('nom :' + nom + " " + req);
+    res.render('login',{name:nom,password:password,corrompu:corrompu});
 });
 
-server.listen(4242, () => {
-  console.log('Express Server is running...');
-});
+var httpsServer = https.createServer(credentials, server);
 
 server.use(express.static(__dirname + '/public'));
 
@@ -63,14 +70,13 @@ function fnpwnedpasswords(password){
                 count: parseInt(sp[1])
             }
         });
-        let found = res.find((h) => h.hash == hashedPassword);
+        let found = res.find((h) => h.hash === hashedPassword);
         if ( found ){
             return 1;
         }else{
             return 0;
         }
-    };
+    }
     while(sync) {require('deasync').sleep(100);}
     return corrompu;
-};
-
+}
