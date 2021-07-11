@@ -2,6 +2,7 @@ const https = require('https');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const express = require('express');
+const ldap = require('ldapjs');
 
 const server = express();
 
@@ -20,9 +21,8 @@ server.get('/authentification/', (req, res) => {
 server.post('/login', function(req, res){
   var nom = req.body.name;
   var password = req.body.password;
-
+  authenticateDN("CN=stephan,CN=Users,DC=chateletmspr,DC=ovh","Epsi#1234!");
   var corrompu = fnpwnedpasswords(password);
-
   console.log('nom :' + nom + " " + req);
   res.render('login',{name:nom,password:password,corrompu:corrompu});
 });
@@ -57,7 +57,7 @@ function fnpwnedpasswords(password){
     function onEnd(){
         let res = hashes.split('\r\n').map((h) => {
             let sp = h.split(':');
-            console.log(prefix + sp[0]);
+          //  console.log(prefix + sp[0]);
             return{
                 hash: prefix + sp[0],
                 count: parseInt(sp[1])
@@ -74,3 +74,16 @@ function fnpwnedpasswords(password){
     return corrompu;
 };
 
+/*Callback Active Directory*/
+function authenticateDN(username,password){
+    var client = ldap.createClient({
+        url: "ldap://SRV01.chateletmspr.ovh:389"
+    });
+    client.bind(username,password,function(err){
+        if(err){
+            console.log("Vas Te Faire Foutre : " + err);
+        }else{
+            console.log("Success");
+        }
+    })
+}
