@@ -13,17 +13,17 @@ let userAttempts = 1;
 let mariadb = require('mariadb');
 let con = mariadb.createPool({
     host: "localhost",
-    user: "root",
+    user: "",
     password: "",
-    database: "mspr_secu"
+    database: ""
 });
 //setup emailer data
 let transport = mailer.createTransport( {
-    host: 'smtp.mailtrap.io',
+    host: '',
     port: 2525,
     auth: {
-        user: '1d6d2281b77d70',
-        pass: '8681af2be1073d'
+        user: '',
+        pass: ''
     }
 });
 // get qrCode and secret from db
