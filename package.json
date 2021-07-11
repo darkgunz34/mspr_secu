@@ -9,6 +9,7 @@
     "express": "^4.17.1",
     "https": "^1.0.0",
     "jsdom": "^16.6.0",
+    "mariadb": "^2.5.4",
     "mysql": "^2.18.1",
     "nexmo": "^2.9.1",
     "nodebootstrap": "^4.5.0",

@@ -10,8 +10,8 @@ const tools = require('./tools/tools.js');
 let bruteTemp = [];
 let bruteDelta = [];
 let userAttempts = 1;
-let mysql = require('mysql');
-let con = mysql.createConnection({
+let mariadb = require('mariadb');
+let con = mariadb.createPool({
     host: "localhost",
     user: "root",
     password: "",
@@ -19,23 +19,31 @@ let con = mysql.createConnection({
 });
 //setup emailer data
 let transport = mailer.createTransport( {
-    host: '',
+    host: 'smtp.mailtrap.io',
     port: 2525,
     auth: {
-        user: '',
-        pass: ''
+        user: '1d6d2281b77d70',
+        pass: '8681af2be1073d'
     }
 });
 // get qrCode and secret from db
 let codeBarre = "";
 let secretTemp = "";
-con.connect(function(err) {
+con.getConnection()
+    .then(conn => {
+        conn.query("SELECT * FROM qr_code WHERE id = 1").then((res) => {
+            codeBarre = '<img src="' + res[0].code + '">';
+            secretTemp = res[0].secret
+        });
+    });
+
+/*con.connect(function(err) {
     let query = "SELECT * FROM qr_code WHERE id = 1";
     con.query(query, function(err, result) {
         codeBarre = '<img src="' + result[0].code + '">';
         secretTemp = result[0].secret;
     });
-});
+})*/
 
 server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
@@ -52,12 +60,18 @@ server.post('/login', function(req, res){
   let userIp = req.ip;
   let nom = req.body.name;
   let password = req.body.password;
+  if(password === "") {
+      return;
+  }
+  //let userAgent = req.headers['user-agent'];
+  //console.log(req);
+  //console.log(userAgent);
   let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
   tools.checkIfIpIsBan(con, userIp, res); // if ban renvoi sur ban.ejs
-  tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res); // if good renvoie sur check.ejs
+  //tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res); // if good renvoie sur check.ejs
+  //tools.checkUserAgent(nom, userAgent, con, transport);
     if(userAttempts > 5) {
-        console.log('envoie mail ?')
-        tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
+        //tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
         res.render('ban');
     } else {
         let timeStamp = Date.now();
@@ -68,8 +82,9 @@ server.post('/login', function(req, res){
         bruteTemp.push(timeStamp);
         console.log(userAttempts);
         userAttempts++
+        console.log('mot de passe incorrect');
     }
-    // TO DO envoie mail changement de navigateur et changement d'ip
+    //console.log('pending');
 });
 
 // process de validation speakeasy TwoFactor

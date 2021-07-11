@@ -1,15 +1,17 @@
 function checkIfIpIsBan(con, ipUser, res) {
-    con.connect(function(err) {
-        let query = "SELECT * FROM brute_force WHERE ip_user = ?";
-        let value = ipUser;
-        con.query(query,value, function(err, result) {
-            console.log(result);
-            if(err) throw err;
-            if(result.length > 0) {
-              res.render('ban')
-            }
+    con.getConnection()
+        .then(conn => {
+            let query = "SELECT * FROM brute_force WHERE ip_user = ?";
+            let value = ipUser;
+            conn.query(query, value).then((result) => {
+                console.log(result);
+                if(result.length > 0) {
+                    res.render('ban');
+                } else {
+                    return;
+                }
+            });
         });
-    });
 }
 
 function checkIfPasswordIsGood(con, user_name, password, bcrypt, res) {
@@ -19,8 +21,10 @@ function checkIfPasswordIsGood(con, user_name, password, bcrypt, res) {
             if(err) console.log(err);
             if(result.length > 0) {
                 bcrypt.compare(password, result[0].password, function(err2, result2) {
-                   res.render('check');
-                })
+                   if(result2) {
+                       res.render('check');
+                   }
+                });
             }
         });
     });
@@ -88,7 +92,22 @@ function sendMailByType(email, emailType, transport) {
     });
 }
 
-module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, sendMailByType}
+/*function checkUserAgent(nom, userAgent, con, transport) {
+    userAgent = userAgent.split('/')
+    let query = "SELECT * FROM user WHERE identifiant = ?";
+    con.query(query, nom, function(err3, result3){
+        if(result3.length > 0) {
+            let agent = result3[0].user_agent.split('/');
+            if(userAgent[0] !== agent[0] ) {
+                sendMailByType(result3[0].email, 1, transport);
+            } else {
+                console.log("meme navigateur");
+            }
+        }
+    });
+}*/
+
+module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData}
 
 /*
 const salt = 10;
