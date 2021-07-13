@@ -1,8 +1,10 @@
 const https = require('https');
+const http = require('http');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const express = require('express');
 const ldap = require('ldapjs');
+const fs = require('fs')
 const speakeasy = require('speakeasy');
 const mailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
@@ -57,6 +59,8 @@ server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
 
 server.get('/', (req, res) => {
+	console.log(req.headers.host);
+	console.log(req.url);
     res.render('authentification', {img: codeBarre});
 });
 
@@ -105,12 +109,25 @@ server.post('/check', function(req, res) {
     }
 })
 
+server.use(express.static(__dirname + '/public'));
+
 /* START SERVEUR*/
-server.listen(4242, () => {
-  console.log('Express Server is running...');
+https.createServer({
+    key: fs.readFileSync('server.key'),
+    cert: fs.readFileSync('server.cert')
+  }, server)
+  .listen(443, function () {
+    console.log('Express Server is running... https://localhost:443/');
 });
 
-server.use(express.static(__dirname + '/public'));
+//Forcé la redirection
+const httpApp = express();
+httpApp.get("*", function(request, response){
+console.log(request.headers.host);
+console.log(request.url);
+  response.redirect("https://" + request.headers.host + request.url);
+});
+httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80`));
 
 // https://www.video-game-codeur.fr/node-js-form-post-get-express-url/
 
