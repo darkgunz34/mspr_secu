@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const express = require('express');
 const ldap = require('ldapjs');
+const fs = require('fs')
 const speakeasy = require('speakeasy');
 const mailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
@@ -106,8 +107,12 @@ server.post('/check', function(req, res) {
 })
 
 /* START SERVEUR*/
-server.listen(4242, () => {
-  console.log('Express Server is running...');
+https.createServer({
+    key: fs.readFileSync('server.key'),
+    cert: fs.readFileSync('server.cert')
+  }, app)
+  .listen(4242, function () {
+    console.log('Express Server is running...');
 });
 
 server.use(express.static(__dirname + '/public'));
