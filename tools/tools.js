@@ -69,6 +69,23 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
     });
 };
 
+function checkUserAgent(nom, userAgent, con, transport) {
+    userAgent = userAgent.split('/')
+    con.getConnection()
+        .then(conn => {
+            let query = "SELECT * FROM user WHERE identifiant ="+nom;
+            conn.query(query)
+                .then((result) => {
+                    let agent = result[0].user_agent.split('/');
+                    if(userAgent[0] !== agent[0]) {
+                        sendMailByType(result[0].email, 1, transport);
+                    } else {
+                        console.log("meme navigateur");
+                    }
+                })
+        });
+}
+
 function sendMailByType(email, emailType, transport) {
     // type 1 = changement de navigateur, 2 = changement ip, 3 = ipBan
     let subject = "";
@@ -106,7 +123,7 @@ function sendMailByType(email, emailType, transport) {
     });
 }
 
-module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, sendMailByType}
+module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, checkUserAgent}
 
 /*
 const salt = 10;

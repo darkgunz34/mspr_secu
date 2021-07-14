@@ -70,12 +70,14 @@ server.get('/authentification/', (req, res) => {
 
 server.post('/login', function(req, res){
 //  authenticateDN("CN=stephan,CN=Users,DC=chateletmspr,DC=ovh","Epsi#1234!");
+    let userAgent = req.headers['user-agent']
     let userIp = req.ip;
     let nom = req.body.name;
     let password = req.body.password;
     let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
     tools.checkIfIpIsBan(con, userIp, res); // if ban renvoi sur ban.ejs
     tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res); // if good renvoie sur check.ejs
+    tools.checkUserAgent(nom,userAgent,con,transport);
       if(userAttempts > 5) {
           console.log('envoie mail ?')
           tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
