@@ -74,9 +74,9 @@ server.post('/login', function(req, res){
     let userIp = req.ip;
     let nom = req.body.name;
     let password = req.body.password;
-    let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
+    //let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
     tools.checkIfIpIsBan(con, userIp, res); // if ban renvoi sur ban.ejs
-    tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res); // if good renvoie sur check.ejs
+    tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res, transport); // if good renvoie sur check.ejs
     tools.checkUserAgent(nom,userAgent,con,transport);
       if(userAttempts > 5) {
           console.log('envoie mail ?')
@@ -133,44 +133,7 @@ httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80
 
 // https://www.video-game-codeur.fr/node-js-form-post-get-express-url/
 
-function fnpwnedpasswords(password){
-    let sync = true;
-    let hashedPassword = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
-    let prefix = hashedPassword.slice(0,5);
-    let apiCall = `https://api.pwnedpasswords.com/range/${prefix}`;
 
-    let hashes = '';
-    let corrompu = 0;
-
-    https.get(apiCall,function(res){
-        res.setEncoding('utf8');
-        res.on('data',(chunk) => hashes += chunk);
-        res.on('end', function(){
-            corrompu = onEnd();
-            sync = false;
-        });
-    }).on('error', function (err){
-        console.log(`Error : ${err}`);
-    });
-    function onEnd(){
-        let res = hashes.split('\r\n').map((h) => {
-            let sp = h.split(':');
-          //  console.log(prefix + sp[0]);
-            return{
-                hash: prefix + sp[0],
-                count: parseInt(sp[1])
-            };
-        });
-        let found = res.find((h) => h.hash == hashedPassword);
-        if ( found ){
-            return 1;
-        }else{
-            return 0;
-        };
-    };
-    while(sync) {require('deasync').sleep(100);}
-    return corrompu;
-};
 
 /*Callback Active Directory*/
 function authenticateDN(username,password){

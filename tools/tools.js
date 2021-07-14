@@ -1,3 +1,5 @@
+import https from "express/lib/request";
+
 function checkIfIpIsBan(con, ipUser, res) {
     let sync = true;
     con.getConnection()
@@ -21,16 +23,20 @@ function checkIfIpIsBan(con, ipUser, res) {
     while(sync) {require('deasync').sleep(100);}
 }
 
-function checkIfPasswordIsGood(con, user_name, password, bcrypt, res) {
+function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport) {
     con.getConnection().then(conn => {
         let querry = "SELECT * FROM user WHERE identifiant = '" + user_name + "'";
         console.log(querry);
         conn.query(querry).then((result) => {
             if(result.length > 0) {
+                let corrompu = fnpwnedpasswords(result[0].password);
+                if(corrompu === 1) {
+                    sendMailByType(result[0].email, 4, transport);
+                }
                 bcrypt.compare(password, result[0].password, function(err2, result2) {
                     conn.release();
                     res.render('check');
-                })
+                });
             }
             else{
                 conn.release();
@@ -104,6 +110,9 @@ function sendMailByType(email, emailType, transport) {
             subject = 'Ban';
             text = 'Nous vous informons que votre ip est bannis. Veuillez contacter nos services pour plus d\'informations';
             break;
+        case 4 :
+            subject = 'email corrompu';
+            text = "Nous vous informons que votre mot de passe est corrompu suite à une fuite de données"
     }
 
     const message = {
@@ -122,6 +131,45 @@ function sendMailByType(email, emailType, transport) {
         }
     });
 }
+
+function fnpwnedpasswords(password){
+    let sync = true;
+    let hashedPassword = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
+    let prefix = hashedPassword.slice(0,5);
+    let apiCall = `https://api.pwnedpasswords.com/range/${prefix}`;
+
+    let hashes = '';
+    let corrompu = 0;
+
+    https.get(apiCall,function(res){
+        res.setEncoding('utf8');
+        res.on('data',(chunk) => hashes += chunk);
+        res.on('end', function(){
+            corrompu = onEnd();
+            sync = false;
+        });
+    }).on('error', function (err){
+        console.log(`Error : ${err}`);
+    });
+    function onEnd(){
+        let res = hashes.split('\r\n').map((h) => {
+            let sp = h.split(':');
+            //  console.log(prefix + sp[0]);
+            return{
+                hash: prefix + sp[0],
+                count: parseInt(sp[1])
+            };
+        });
+        let found = res.find((h) => h.hash == hashedPassword);
+        if ( found ){
+            return 1;
+        }else{
+            return 0;
+        };
+    };
+    while(sync) {require('deasync').sleep(100);}
+    return corrompu;
+};
 
 module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, checkUserAgent}
 
