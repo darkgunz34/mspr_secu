@@ -1,57 +1,32 @@
 function checkIfIpIsBan(con, ipUser, res) {
     let sync = true;
+    let valeur_retour = false;
     con.getConnection()
         .then(conn => {
             let query = "SELECT * FROM brute_force WHERE ip_user = ?";
             let value = ipUser;
             conn.query(query, value).then((result) => {
                 if(result.length > 0) {
-                    console.log("GO BAN");
-                    conn.release();
-                    res.render('ban');
-                    sync = false;
+                    valeur_retour = true;
                 }else{
-                    console.log("GO NON BAN");
-                    conn.release();
-                    sync = false;
+                    valeur_retour = false;
                 }
-        });
+                sync = false;
+            });
     });
 
     while(sync) {require('deasync').sleep(100);}
-}
-
-function checkIfPasswordIsGood(con, user_name, password, bcrypt, res) {
-    con.getConnection().then(conn => {
-        let querry = "SELECT * FROM user WHERE identifiant = '" + user_name + "'";
-        console.log(querry);
-        conn.query(querry).then((result) => {
-            if(result.length > 0) {
-                bcrypt.compare(password, result[0].password, function(err2, result2) {
-                    conn.release();
-                    res.render('check');
-                })
-            }
-            else{
-                conn.release();
-            }
-        });
-    });
+    return valeur_retour;
 }
 
 function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport) {
-    console.log("Call saveBruteForceData");
     con.getConnection()
         .then(conn => {
             let query = "SELECT * FROM user WHERE identifiant = '" + userIdentifiant +"'";
             conn.query(query).then((result) => {
                 if(result.length > 0) {
-                    console.log("valide la fonction battard !");
                     email2 = result[0].email;
-                    conn.release();
                     sendMailByType(email2, 3, transport);
-                }else{
-                    conn.release();
                 }
             });
         });
@@ -59,11 +34,9 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
         .then(conn => {
             let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0)
             let dateBan = new Date().toISOString().slice(0,19).replace('T', ' ');
-            console.log(( arrayTimeStampSum / (bruteDelta.length - 1)) <= 500);
             if(( arrayTimeStampSum / (bruteDelta.length - 1)) <= 500) {
                 let query2 = "INSERT INTO brute_force(ip_user, date_ban) VALUES ( '" + userIp + "','" + dateBan + "')";
                 conn.query(query2);
-                console.log("insertion ? : " + query2);
                 conn.release();
             }
     });
@@ -106,26 +79,49 @@ function sendMailByType(email, emailType, transport) {
     });
 }
 
-module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, sendMailByType}
 
-/*
-const salt = 10;
-bcrypt.genSalt(salt, function(err, salt) {
-    bcrypt.hash('test', salt, function(err, hash) {
-        console.log(hash);
-    });
-});*/
+/**
+ * Méthode pour vérifier si le mot de passe à déjà été détecter comme pirater.
+ * @param {*} password Le mot de passe à contrôler
+ * @param {*} crypto La crypto pour le hash du password.
+ * @param {*} https protocole pour consommer l'API
+ * @returns boolean true si le mpd est corrompu. False dans le cas intverse.
+ */
+function check_password_api(password,crypto,https){
+    let sync = true;
+    let hashedPassword = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
+    let prefix = hashedPassword.slice(0,5);
+    let apiCall = `https://api.pwnedpasswords.com/range/${prefix}`;
+    let hashes = '';
+    let corrompu = 0;
 
-/*var secret = speakeasy.generateSecret();
-var secretTemp = secret.base32;
-var QRCode = require('qrcode');
-QRCode.toDataURL(secret.otpauth_url, function(err, data_url) {
-    console.log(data_url);
-    con.connect(function(err) {
-    // envoie qr_code to db
-        var query = "INSERT INTO qr_code(code) VALUES( ? )";
-        con.query(query,data_url, function(err, result) {
-            //
+    https.get(apiCall,function(res){
+        res.setEncoding('utf8');
+        res.on('data',(chunk) => hashes += chunk);
+        res.on('end', function(){
+            corrompu = onEnd();
+            sync = false;
         });
+    }).on('error', function (err){
+        console.log(`Erreur durant l'appel API : ${apiCall} => ${err}`);
     });
-})*/
+    function onEnd(){
+        let res = hashes.split('\r\n').map((h) => {
+            let sp = h.split(':');
+            return{
+                hash: prefix + sp[0],
+                count: parseInt(sp[1])
+            };
+        });
+        let found = res.find((h) => h.hash == hashedPassword);
+        if ( found ){
+            return true;
+        }else{
+            return false;
+        };
+    };
+    while(sync) {require('deasync').sleep(100);}
+    return corrompu;
+};
+
+module.exports = { checkIfIpIsBan, saveBruteForceData, sendMailByType,check_password_api}
