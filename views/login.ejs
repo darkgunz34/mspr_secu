@@ -11,7 +11,7 @@
 <body>
   <h2>Espace Personnel</h2>
 
-  <p>Bon retour parmis nous <%- name -%>. Vous pouvez dès à présent utiliser le portail pour accéder à vos différents dossiers.</p>
+  <p>Bon retour parmis nous. Vous pouvez dès à présent utiliser le portail pour accéder à vos différents dossiers.</p>
 
   <% if(corrompu){ %>
     <div class="alert alert-danger" role="alert">
@@ -27,7 +27,7 @@
 
   <script>
     function redirect(){
-      path = window.location.href + "/deconnection";
+      path = window.location.href + "/../logout";
       window.location.assign(path); 
     }
     </script>

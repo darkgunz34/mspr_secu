@@ -10,20 +10,16 @@
 </head>
 <body>
     <div>
-        <h1 class="d-flex justify-content-center">Bienvenue sur le portail d'authentification</h1>
-
-        <% if(message){ %>
-            <div><%-message-%></div>
-        <%}%>
+        <h1 class="d-flex justify-content-center">Zone de saisie d'autorisation d'accès depuuis un autre navigateur</h1>
 
         <div class="d-flex justify-content-center" style="margin-top: 2em;">
-            <form action="login" method="POST">
+            <form action="valide" method="POST">
                 <div class="col">
-                    <input class="form-control" type="text" id="nom" name="nom" placeholder="Votre mot de passe">
+                    <input class="form-control" type="text" id="code" name="code" placeholder="Le code reçu par mail">
                 </div>
 
                 <div class="col">
-                    <input class="form-control" type="password" id="password" name="password" placeholder="Votre mot de passe">
+                    <input class="form-control" type="texte" id="mail" name="mail" placeholder="mail">
                 </div>
 
                 <div class="col justify-content-center">
@@ -31,9 +27,6 @@
                 </div>
             </form>
         </div>
-        <h2 class="d-flex justify-content-right">QrCode pour l'authentification OTP</h2>
-        <div><%- img -%></div>
     </div>
 </body>
-<footer>En cas de problème ou de question concernant le portail et l'utilisation des données, merci de vous adresser à l'adresse suivante : stephan.parichon@epsi.fr</footer>
 </html>

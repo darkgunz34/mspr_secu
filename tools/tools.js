@@ -10,6 +10,7 @@ function checkIfIpIsBan(con, ipUser) {
                 }
                 sync = false;
             });
+            conn.release();
     });
 
     while(sync) {require('deasync').sleep(100);}
@@ -19,39 +20,47 @@ function checkIfIpIsBan(con, ipUser) {
 function checkUserAgent(mail, con, agent) {
     let sync = true;
     let valeur_retour = false;
+    console.log("checkUserAgent");
 
     con.getConnection()
         .then(conn => {
-            let query = "SELECT count(*) FROM access WHERE a_mail = '" + mail + "' and a_active = 'true' and a_agent = '"+ agent +"' ORDER BY a_date DESC LIMIT 1";
+            let query = "SELECT * FROM access WHERE a_mail = '" + mail + "' and a_active = 'true' and a_agent = '"+ agent +"' ORDER BY a_date DESC LIMIT 1";
+            console.log(query);
             conn.query(query)
                 .then((result) => {
-                    if(result.count() >= 1) {
+                    console.log(result);
+                    if(result.length > 0) {
                         valeur_retour = true;
                     }
                     sync = false;
-                });
+            });
+            conn.release();
         });
     while(sync) {require('deasync').sleep(100);}
+    console.log("valeur_retour : " + valeur_retour);
     return valeur_retour;
 }
 
-function declarationChangementSupport(email,adresse_ip,typeSupport,date) {
+function declarationChangementSupport(email,typeSupport,date,con) {
     con.getConnection()
         .then(conn => {
-            let query = "INSERT INTO access (a_prenom,a_ip,a_agent,a_date,a_active) VALUES ("+email+"', '"+adresse_ip+"','"+typeSupport+"', '"+date+"','false')";
+            let query = "INSERT INTO access (a_mail,a_agent,a_date,a_active) VALUES ('"+email+"','"+typeSupport+"', '"+convertDate(date)+"','false')";
             conn.query(query);
+            conn.release();
         });
-}
+    }
 
 function checkValide(con,mail,code){
     return con.getConnection()
         .then(conn => {
             let query = "SELECT * FROM access_validation WHERE mail = '"+ mail + "' and code = '" + code + "'"; 
-            return conn.query(query).then((result) => {
+            let rs =  conn.query(query).then((result) => {
                 if(result.length > 0) {
                     return true;
                 }
             });
+            conn.release();
+            return rs;
         });
 }
 
@@ -65,6 +74,7 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
                     sendMailByType(email2, 3, transport,null);
                 }
             });
+            conn.release();
         });
     con.getConnection()
         .then(conn => {
@@ -73,36 +83,44 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
             if(( arrayTimeStampSum / (bruteDelta.length - 1)) <= 500) {
                 let query2 = "INSERT INTO brute_force(ip_user, date_ban) VALUES ( '" + userIp + "','" + dateBan + "')";
                 conn.query(query2);
+                conn.release();
             }
     });
 };
 
 function getAgentFromAccessValidation(con,mail,code){
+    let sync = true;
     let valeur_retour;
     con.getConnection()
         .then(conn => {
             let query = "SELECT agent FROM access_validation WHERE mail = '" + mail +"' and code = '" + code +"'";
+            console.log(query);
             conn.query(query).then((result) => {
+                console.log(result);
                 if(result.length > 0) {
-                    valeur_retour = agent;
+                    valeur_retour = result[0].agent;
+                    sync = false;
                 }
             });
+            conn.release();
         });
+    while(sync) {require('deasync').sleep(100);}
     return valeur_retour;
 }
 
 function enAttente(code,mail,date,agent,con){
     con.getConnection()
     .then(conn => {
-        let query = "INSERT INTO `access_validation`(`mail`, `date`, `code`,`agent`) VALUES ("+mail+","+date+","+code+","+ agent +")";
+        let query = "INSERT INTO access_validation(mail,date,code,agent) VALUES ('"+mail+"','"+convertDate(date)+"','"+code+"','"+ agent +"')";
         conn.query(query);
+        conn.release();
     });
 }
 
 function updateAccess(con,mail,agent){
     con.getConnection()
     .then(conn => {
-        let query = "UPDATE access SET a_active = 'true' WHERE a_mail = '"+ mail +"' and a_agent = "+agent+"'";
+        let query = "UPDATE access SET a_active = 'true' WHERE a_mail = '"+ mail +"' and a_agent = '"+agent+"'";
         conn.query(query);  
     });
 }
@@ -123,7 +141,7 @@ function sendMailByType(email, emailType, transport,code) {
             break;
         case 3 :
             subject = 'Ban';
-            text = 'Nous vous informons que votre ip est bannis. Veuillez contacter nos services pour plus d\'informations';
+            text = 'Nous vous informons que votre ip est bannis. Veuillez contacter nos services pour plus d\'informations.';
             break;
     }
 
@@ -183,7 +201,7 @@ function check_password_api(password,crypto,https){
     return corrompu;
 };
 
-function recuperationAgentFromRequest(req){
+function recuperationAgentFromRequest(req,userAgent){
     return userAgent.parse(req.headers['user-agent']);
 }
 

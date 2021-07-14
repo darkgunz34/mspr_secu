@@ -14,7 +14,7 @@ const useragent = require('useragent');
 
 let bruteTemp = [];
 let bruteDelta = [];
-let userAttempts = 1;
+let compteurBrutforce = 1;
 let mariadb = require('mariadb');
 let con = mariadb.createPool({
     host: "192.168.1.33",
@@ -59,17 +59,17 @@ con.getConnection()
 server.use(bodyParser.urlencoded({ extended: true }));
 
 server.get('/', (req, res) => {
-    res.render('authentification', {img: codeBarre});
+    res.render('authentification', {img: codeBarre,message:""});
 });
 
 server.get('/authentification/', (req, res) => {
-    res.render('authentification', {img: codeBarre});
+    res.render('authentification', {img: codeBarre,message:""});
 });
 
 server.post('/login', function(req, res){
     let userIp = req.ip;
-    let nom = req.session.nom;
-    let password = req.session.password;
+    let nom = req.body.nom;
+    let password = req.body.password;
     let ban = tools.checkIfIpIsBan(con, userIp);
 
     if(ban){
@@ -78,22 +78,20 @@ server.post('/login', function(req, res){
 
     let mail = authenticateDN("CN="+nom,password);
 
-    if(mail!==false){
-        let agent = tools.recuperationAgentFromRequest(req);
+    if(mail && mail !== "PAS DE MAIL"){
+        let agent = tools.recuperationAgentFromRequest(req,useragent);
+        console.log("test");
 
         if(tools.checkUserAgent(mail,con,agent)){
             req.session.password = password;
             req.session.nom = nom;
             res.render('check');
         }else{
-            let date = Date.now();
-            //génération d'un code
+            let date = new Date();
             code = Math.random()*1000;
-            //insert table temp_access
             tools.enAttente(code,mail,date,agent,con);
-            //send mail
             tools.sendMailByType(mail, 1, transport,code);
-            tools.declarationChangementSupport(mail,adresse_ip,typeSupport,date);
+            tools.declarationChangementSupport(mail,agent,date,con);
             res.render('wait');
         };
     }
@@ -101,21 +99,30 @@ server.post('/login', function(req, res){
     if(compteurBrutforce > 5) {
           tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
           res.render('ban');
-    }else {
-          let timeStamp = Date.now();
+    }if(mail === "PAS DE MAIL"){
+        res.render('authentification',{img: codeBarre,message:"Votre compte n'est pas paramétrer. Contactez l'administrateur."});
+    }
+    else {
+          let timeStamp = new Date();
           bruteTemp.push(timeStamp);
-          compteurBrutforce++;
-          res.render('authentification',{img: codeBarre});
+          res.render('authentification',{img: codeBarre,message:"Mot de passe ou nom de compte invalide"});
       }
 });
 
+server.get('/valide',function(req,res){
+    res.render('valide');
+})
+
 //Après envoie de mail
-server.post('/valid', function(req, res) {
-    let code = req.code;
-    let mail = req.mail;
+server.post('/valide', function(req, res) {
+    let code = req.body.code;
+    let mail = req.body.mail;
+    console.log("code : " + code);
+    console.log("mail : " + mail);
     if(mail && code){
         if(tools.checkValide(con,mail,code)){
-            tools.getAgentFromAccessValidation(con,mail,code);
+            let agent = tools.getAgentFromAccessValidation(con,mail,code);
+            console.log("agent : " + agent);
             tools.updateAccess(con,mail,agent);
             res.render('authentification',{img: codeBarre,message:"Vous pouvez maintenant vous reconnecter"});
         }
@@ -142,13 +149,14 @@ server.post('/check', function(req, res) {
     if(verified) {
         res.render('login',{corrompu:corrompu});
     }else{
-        res.render('authentification',{img: codeBarre});
+        res.render('authentification',{img: codeBarre,message:""});
     }
 })
 
-server.get('/deconnexion', function(req, res){
+server.get('/logout', function(req, res){
+    console.log("test");
     req.session.destroy();
-    res.render('authentification.ejs',{img: codeBarre});
+    res.render('authentification',{img: codeBarre,message:""});
 });
 
 server.use(express.static(__dirname + '/public'));
@@ -180,22 +188,23 @@ function authenticateDN(username,password){
         password = " ";
     }
 
-    let appelBind = username + ",CN=Users," + sufix
+    let appelBind = username + ",CN=Users," + sufix;
     client.bind(appelBind,password,function(err){
-        if(err){
-            console.log("Identifiant LDAP incorrect");
-        }else{
-            console.log("Identifiant LDAP valide");
+        if(!err){
             client.search(sufix,{ filter: "("+username+")",attributes: ['dn', 'sn', 'cn',"mail",],scope: 'sub',},(err,res) => {
-                console.log(res);
                 res.on('searchEntry', function(entry) {
-                    valeur_retour = JSON.stringify(entry.object.mail)
+                    mail = JSON.stringify(entry.object.mail);
+                    if(mail){
+                        valeur_retour = mail.replace('"','').replace('"','');
+                    }else{
+                        valeur_retour="PAS DE MAIL";
+                    }
                 });
-                sync = false;
             });
         }
+        sync = false;
     });
-
+    console.log("ldpa");
     while(sync) {require('deasync').sleep(100);}
     return valeur_retour;
 };
