@@ -1,4 +1,4 @@
-import https from "express/lib/request";
+
 
 function checkIfIpIsBan(con, ipUser, res) {
     let sync = true;
@@ -23,15 +23,14 @@ function checkIfIpIsBan(con, ipUser, res) {
     while(sync) {require('deasync').sleep(100);}
 }
 
-function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport) {
+function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport, corrompu) {
     con.getConnection().then(conn => {
         let querry = "SELECT * FROM user WHERE identifiant = '" + user_name + "'";
         console.log(querry);
         conn.query(querry).then((result) => {
             if(result.length > 0) {
-                let corrompu = fnpwnedpasswords(result[0].password);
                 if(corrompu === 1) {
-                    sendMailByType(result[0].email, 4, transport);
+                    sendMailByType(result[0].email, 4, transport); // envoie email si password corrompu
                 }
                 bcrypt.compare(password, result[0].password, function(err2, result2) {
                     conn.release();
@@ -53,7 +52,7 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
             conn.query(query).then((result) => {
                 if(result.length > 0) {
                     console.log("valide la fonction battard !");
-                    email2 = result[0].email;
+                    let email2 = result[0].email;
                     conn.release();
                     sendMailByType(email2, 3, transport);
                 }else{
@@ -132,44 +131,7 @@ function sendMailByType(email, emailType, transport) {
     });
 }
 
-function fnpwnedpasswords(password){
-    let sync = true;
-    let hashedPassword = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
-    let prefix = hashedPassword.slice(0,5);
-    let apiCall = `https://api.pwnedpasswords.com/range/${prefix}`;
 
-    let hashes = '';
-    let corrompu = 0;
-
-    https.get(apiCall,function(res){
-        res.setEncoding('utf8');
-        res.on('data',(chunk) => hashes += chunk);
-        res.on('end', function(){
-            corrompu = onEnd();
-            sync = false;
-        });
-    }).on('error', function (err){
-        console.log(`Error : ${err}`);
-    });
-    function onEnd(){
-        let res = hashes.split('\r\n').map((h) => {
-            let sp = h.split(':');
-            //  console.log(prefix + sp[0]);
-            return{
-                hash: prefix + sp[0],
-                count: parseInt(sp[1])
-            };
-        });
-        let found = res.find((h) => h.hash == hashedPassword);
-        if ( found ){
-            return 1;
-        }else{
-            return 0;
-        };
-    };
-    while(sync) {require('deasync').sleep(100);}
-    return corrompu;
-};
 
 module.exports = { checkIfIpIsBan, checkIfPasswordIsGood, saveBruteForceData, checkUserAgent}
 
