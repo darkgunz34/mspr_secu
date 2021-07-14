@@ -75,7 +75,7 @@ server.post('/login', function(req, res){
         res.render('ban');
     }
 
-    let result = authenticateDN("CN="+nom+",CN=Users,DC=chateletmspr,DC=ovh",password);
+    let result = authenticateDN("CN="+nom,password);
 
     if(result){
         //TODO : secure
@@ -145,6 +145,7 @@ httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80
 
 /*Callback Active Directory*/
 function authenticateDN(username,password){
+    let sufix = "DC=chateletmspr,DC=ovh";
     let sync = true;
     let valeur_retour = false;
     let client = ldap.createClient({
@@ -154,8 +155,8 @@ function authenticateDN(username,password){
         password = "XXXX";
     }
 
-    client.bind(username,password,function(err){
-        console.log(username + " => " + password);
+    let appelBind = username + ",CN=Users," + sufix
+    client.bind(appelBind,password,function(err){
         if(err){
             console.log("Identifiant LDAP incorrect");
             valeur_retour = false;
@@ -163,6 +164,13 @@ function authenticateDN(username,password){
             console.log("Identifiant LDAP valide");
             valeur_retour = true;
         }
+    });
+
+    client.search(sufix,{ filter: "("+username+")",attributes: ['dn', 'sn', 'cn',"mail",],scope: 'sub',},(err,res) => {
+        console.log(res);
+        res.on('searchEntry', function(entry) {
+            console.log('Mail : ' + JSON.stringify(entry.object.mail));
+        });
         sync = false;
     });
 
