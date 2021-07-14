@@ -155,6 +155,7 @@ function authenticateDN(username,password){
     }
 
     client.bind(username,password,function(err){
+        console.log(username + " => " + password);
         if(err){
             console.log("Identifiant LDAP incorrect");
             valeur_retour = false;
