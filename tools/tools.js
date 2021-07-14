@@ -1,15 +1,12 @@
-function checkIfIpIsBan(con, ipUser, res) {
+function checkIfIpIsBan(con, ipUser) {
     let sync = true;
     let valeur_retour = false;
     con.getConnection()
         .then(conn => {
-            let query = "SELECT * FROM brute_force WHERE ip_user = ?";
-            let value = ipUser;
-            conn.query(query, value).then((result) => {
+            let query = "SELECT * FROM brute_force WHERE ip_user = '" + ipUser + "'";
+            conn.query(query).then((result) => {
                 if(result.length > 0) {
                     valeur_retour = true;
-                }else{
-                    valeur_retour = false;
                 }
                 sync = false;
             });
@@ -19,6 +16,45 @@ function checkIfIpIsBan(con, ipUser, res) {
     return valeur_retour;
 }
 
+function checkUserAgent(mail, con, agent) {
+    let sync = true;
+    let valeur_retour = false;
+
+    con.getConnection()
+        .then(conn => {
+            let query = "SELECT count(*) FROM access WHERE a_mail = '" + mail + "' and a_active = 'true' and a_agent = '"+ agent +"' ORDER BY a_date DESC LIMIT 1";
+            conn.query(query)
+                .then((result) => {
+                    if(result.count() >= 1) {
+                        valeur_retour = true;
+                    }
+                    sync = false;
+                });
+        });
+    while(sync) {require('deasync').sleep(100);}
+    return valeur_retour;
+}
+
+function declarationChangementSupport(email,adresse_ip,typeSupport,date) {
+    con.getConnection()
+        .then(conn => {
+            let query = "INSERT INTO access (a_prenom,a_ip,a_agent,a_date,a_active) VALUES ("+email+"', '"+adresse_ip+"','"+typeSupport+"', '"+date+"','false')";
+            conn.query(query);
+        });
+}
+
+function checkValide(con,mail,code){
+    return con.getConnection()
+        .then(conn => {
+            let query = "SELECT * FROM access_validation WHERE mail = '"+ mail + "' and code = '" + code + "'"; 
+            return conn.query(query).then((result) => {
+                if(result.length > 0) {
+                    return true;
+                }
+            });
+        });
+}
+
 function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport) {
     con.getConnection()
         .then(conn => {
@@ -26,23 +62,52 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
             conn.query(query).then((result) => {
                 if(result.length > 0) {
                     email2 = result[0].email;
-                    sendMailByType(email2, 3, transport);
+                    sendMailByType(email2, 3, transport,null);
                 }
             });
         });
     con.getConnection()
         .then(conn => {
-            let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0)
-            let dateBan = new Date().toISOString().slice(0,19).replace('T', ' ');
+            let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0);
+            let dateBan = convertDate(new Date());
             if(( arrayTimeStampSum / (bruteDelta.length - 1)) <= 500) {
                 let query2 = "INSERT INTO brute_force(ip_user, date_ban) VALUES ( '" + userIp + "','" + dateBan + "')";
                 conn.query(query2);
-                conn.release();
             }
     });
 };
 
-function sendMailByType(email, emailType, transport) {
+function getAgentFromAccessValidation(con,mail,code){
+    let valeur_retour;
+    con.getConnection()
+        .then(conn => {
+            let query = "SELECT agent FROM access_validation WHERE mail = '" + mail +"' and code = '" + code +"'";
+            conn.query(query).then((result) => {
+                if(result.length > 0) {
+                    valeur_retour = agent;
+                }
+            });
+        });
+    return valeur_retour;
+}
+
+function enAttente(code,mail,date,agent,con){
+    con.getConnection()
+    .then(conn => {
+        let query = "INSERT INTO `access_validation`(`mail`, `date`, `code`,`agent`) VALUES ("+mail+","+date+","+code+","+ agent +")";
+        conn.query(query);
+    });
+}
+
+function updateAccess(con,mail,agent){
+    con.getConnection()
+    .then(conn => {
+        let query = "UPDATE access SET a_active = 'true' WHERE a_mail = '"+ mail +"' and a_agent = "+agent+"'";
+        conn.query(query);  
+    });
+}
+
+function sendMailByType(email, emailType, transport,code) {
     // type 1 = changement de navigateur, 2 = changement ip, 3 = ipBan
     let subject = "";
     let text = "";
@@ -50,7 +115,7 @@ function sendMailByType(email, emailType, transport) {
         case 1 :
             subject = 'Changement de navigateur detecté';
             text = 'Nous avons detecté un changement de navigateur. ' +
-                'Si ce changement est de votre fait veuillez cliquer sur le lien ci dessous afin de confirmer la connexion';
+                'Si ce changement est de votre fait vous rendre sur la page d\'authorisation prévu à cette effet avec le code suivant : ' + code;
             break;
         case 2 :
             subject = 'Notification';
@@ -70,13 +135,7 @@ function sendMailByType(email, emailType, transport) {
     };
 
     //envoyer
-    transport.sendMail(message, function(err, result) {
-        if(err) {
-            console.log(err)
-        } else {
-            console.log(result)
-        }
-    });
+    transport.sendMail(message);
 }
 
 
@@ -113,7 +172,7 @@ function check_password_api(password,crypto,https){
                 count: parseInt(sp[1])
             };
         });
-        let found = res.find((h) => h.hash == hashedPassword);
+        let found = res.find((h) => h.hash === hashedPassword);
         if ( found ){
             return true;
         }else{
@@ -124,4 +183,11 @@ function check_password_api(password,crypto,https){
     return corrompu;
 };
 
-module.exports = { checkIfIpIsBan, saveBruteForceData, sendMailByType,check_password_api}
+function recuperationAgentFromRequest(req){
+    return userAgent.parse(req.headers['user-agent']);
+}
+
+function convertDate(date){
+    return date.toISOString().slice(0,19).replace('T', ' ');
+}
+module.exports = { checkIfIpIsBan, saveBruteForceData, sendMailByType,check_password_api,checkUserAgent,declarationChangementSupport,enAttente,checkValide,updateAccess,recuperationAgentFromRequest,getAgentFromAccessValidation}

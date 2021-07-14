@@ -10,6 +10,7 @@ const mailer = require('nodemailer');
 const tools = require('./tools/tools.js');
 const session = require('express-session');
 const server = express();
+const useragent = require('useragent');
 
 let bruteTemp = [];
 let bruteDelta = [];
@@ -67,39 +68,64 @@ server.get('/authentification/', (req, res) => {
 
 server.post('/login', function(req, res){
     let userIp = req.ip;
-    let nom = req.body.name;
-    let password = req.body.password;
-    let ban = tools.checkIfIpIsBan(con, userIp, res);
+    let nom = req.session.nom;
+    let password = req.session.password;
+    let ban = tools.checkIfIpIsBan(con, userIp);
 
     if(ban){
         res.render('ban');
     }
 
-    let result = authenticateDN("CN="+nom+",CN=Users,DC=chateletmspr,DC=ovh",password);
+    let mail = authenticateDN("CN="+nom,password);
 
-    if(result){
-        //TODO : secure
-        req.session.password = password;
-        req.session.nom = nom;
-        res.render('check');
+    if(mail!==false){
+        let agent = tools.recuperationAgentFromRequest(req);
+
+        if(tools.checkUserAgent(mail,con,agent)){
+            req.session.password = password;
+            req.session.nom = nom;
+            res.render('check');
+        }else{
+            let date = Date.now();
+            //génération d'un code
+            code = Math.random()*1000;
+            //insert table temp_access
+            tools.enAttente(code,mail,date,agent,con);
+            //send mail
+            tools.sendMailByType(mail, 1, transport,code);
+            tools.declarationChangementSupport(mail,adresse_ip,typeSupport,date);
+            res.render('wait');
+        };
     }
 
-    if(userAttempts > 5) {
+    if(compteurBrutforce > 5) {
           tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
           res.render('ban');
     }else {
           let timeStamp = Date.now();
-          if(bruteTemp.length > 0) {
-              bruteDelta.push(timeStamp - bruteTemp[bruteTemp.length -1]);
-          }
           bruteTemp.push(timeStamp);
-          userAttempts++;
+          compteurBrutforce++;
           res.render('authentification',{img: codeBarre});
       }
 });
 
+//Après envoie de mail
+server.post('/valid', function(req, res) {
+    let code = req.code;
+    let mail = req.mail;
+    if(mail && code){
+        if(tools.checkValide(con,mail,code)){
+            tools.getAgentFromAccessValidation(con,mail,code);
+            tools.updateAccess(con,mail,agent);
+            res.render('authentification',{img: codeBarre,message:"Vous pouvez maintenant vous reconnecter"});
+        }
+    }
+    res.render('authentification',{img: codeBarre,message:"Impossible de réaliser la mise à jour"});
+});
+
+
 server.post('/check', function(req, res) {
-    let code = req.body.code; // récupération du code entré par l'utilisateur
+    let code = req.body.code; // récupération du code depuis l'authentification Google
     let verified = speakeasy.totp.verify({
         secret : secretTemp,
         encoding: 'base32',
@@ -114,9 +140,9 @@ server.post('/check', function(req, res) {
     let corrompu = tools.check_password_api(password,crypto,https);
     
     if(verified) {
-        res.render('login.ejs',{name:nom,password:password,corrompu:corrompu});
+        res.render('login',{corrompu:corrompu});
     }else{
-        res.render('authentification.ejs',{img: codeBarre});
+        res.render('authentification',{img: codeBarre});
     }
 })
 
@@ -143,27 +169,31 @@ httpApp.get("*", function(request, response){
 });
 httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80`));
 
-/*Callback Active Directory*/
 function authenticateDN(username,password){
+    let sufix = "DC=chateletmspr,DC=ovh";
     let sync = true;
     let valeur_retour = false;
     let client = ldap.createClient({
         url: "ldap://192.168.1.33:389"
     });
     if(!password){
-        password = "XXXX";
+        password = " ";
     }
 
-    client.bind(username,password,function(err){
-        console.log(username + " => " + password);
+    let appelBind = username + ",CN=Users," + sufix
+    client.bind(appelBind,password,function(err){
         if(err){
             console.log("Identifiant LDAP incorrect");
-            valeur_retour = false;
         }else{
             console.log("Identifiant LDAP valide");
-            valeur_retour = true;
+            client.search(sufix,{ filter: "("+username+")",attributes: ['dn', 'sn', 'cn',"mail",],scope: 'sub',},(err,res) => {
+                console.log(res);
+                res.on('searchEntry', function(entry) {
+                    valeur_retour = JSON.stringify(entry.object.mail)
+                });
+                sync = false;
+            });
         }
-        sync = false;
     });
 
     while(sync) {require('deasync').sleep(100);}

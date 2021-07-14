@@ -23,6 +23,13 @@
       </div>
   <% } %>
 
-  <button class="btn btn-outline-info" href="deconnexion">Déconnexion</button>
+  <button class="btn btn-outline-info" onclick="redirect()">Déconnexion</button>
+
+  <script>
+    function redirect(){
+      path = window.location.href + "/deconnection";
+      window.location.assign(path); 
+    }
+    </script>
 </body>
 </html>
