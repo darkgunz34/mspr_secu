@@ -10,15 +10,16 @@ const mailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const tools = require('./tools/tools.js');
 const server = express();
+const useragent = require('useragent');
 
 let bruteTemp = [];
 let bruteDelta = [];
 let userAttempts = 1;
 let mariadb = require('mariadb');
 let con = mariadb.createPool({
-    host: "192.168.1.33",
-    user: "serveur_web",
-    password: "Epsi#1234!",
+    host: "localhost",
+    user: "root",
+    password: "",
     database: "mspr_secu",
     port:3307
 });
@@ -69,15 +70,25 @@ server.get('/authentification/', (req, res) => {
 });
 
 server.post('/login', function(req, res){
-  authenticateDN("CN=stephan,CN=Users,DC=chateletmspr,DC=ovh","Epsi#1234!");
-    let userAgent = req.headers['user-agent']
+  //authenticateDN("CN=stephan,CN=Users,DC=chateletmspr,DC=ovh","Epsi#1234!");
+    //let userAgent = req.headers['user-agent']
     let userIp = req.ip;
     let nom = req.body.name;
     let password = req.body.password;
     let corrompu = fnpwnedpasswords(password); // A implenter dans la logic global
     tools.checkIfIpIsBan(con, userIp, res); // if ban renvoi sur ban.ejs
-    tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res, transport, corrompu); // if good renvoie sur check.ejs
-    tools.checkUserAgent(nom,userAgent,con,transport);
+    tools.checkIfPasswordIsGood(con, nom, password, bcrypt, res, transport, corrompu, function (response) {
+        if(response) {
+            tools.checkUserAgent(nom,req,con,transport, useragent, function(response2) {
+                if(response2) {
+                    res.render('check.ejs');
+                } else {
+                    res.render('wait.ejs');
+                }
+            });
+        }
+    });
+
       if(userAttempts > 5) {
           console.log('envoie mail ?')
           tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
@@ -92,7 +103,7 @@ server.post('/login', function(req, res){
           bruteTemp.push(timeStamp);
           console.log("Compteur " + userAttempts);
           userAttempts++;
-          res.render('authentification',{img: codeBarre});
+          //res.render('authentification',{img: codeBarre});
       }
 });
 
@@ -111,10 +122,18 @@ server.post('/check', function(req, res) {
     }
 })
 
+server.get('/valid', function(req, res) {
+    res.render('check.ejs');
+})
+
+server.listen(4242, () => {
+    console.log('Express Server is running...');
+});
+
 server.use(express.static(__dirname + '/public'));
 
 /* START SERVEUR*/
-https.createServer({
+/*https.createServer({
     key: fs.readFileSync('server.key'),
     cert: fs.readFileSync('server.cert')
   }, server)
@@ -129,7 +148,7 @@ console.log(request.headers.host);
 console.log(request.url);
   response.redirect("https://" + request.headers.host + request.url);
 });
-httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80`));
+httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80`));*/
 
 // https://www.video-game-codeur.fr/node-js-form-post-get-express-url/
 

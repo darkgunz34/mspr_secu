@@ -17,7 +17,8 @@
     "nodemailer": "^6.6.2",
     "nunjucks": "^3.2.3",
     "qrcode": "^1.4.4",
-    "speakeasy": "^2.0.0"
+    "speakeasy": "^2.0.0",
+    "useragent": "^2.3.0"
   },
   "name": "mspr-secu",
   "version": "1.0.0",

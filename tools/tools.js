@@ -23,7 +23,7 @@ function checkIfIpIsBan(con, ipUser, res) {
     while(sync) {require('deasync').sleep(100);}
 }
 
-function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport, corrompu) {
+function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport, corrompu, callback) {
     con.getConnection().then(conn => {
         let querry = "SELECT * FROM user WHERE identifiant = '" + user_name + "'";
         console.log(querry);
@@ -34,11 +34,16 @@ function checkIfPasswordIsGood(con, user_name, password, bcrypt, res, transport,
                 }
                 bcrypt.compare(password, result[0].password, function(err2, result2) {
                     conn.release();
-                    res.render('check');
+                    if(result2) {
+                        return callback(true);
+                    }
+                    return callback(false);
+
                 });
             }
             else{
                 conn.release();
+                return callback(false);
             }
         });
     });
@@ -74,18 +79,19 @@ function saveBruteForceData(con, bruteDelta, userIp, userIdentifiant, transport)
     });
 };
 
-function checkUserAgent(nom, userAgent, con, transport) {
-    userAgent = userAgent.split('/')
+function checkUserAgent(nom, req, con, transport, userAgent, callback) {
+    let agent = userAgent.parse(req.headers['user-agent']);
     con.getConnection()
         .then(conn => {
-            let query = "SELECT * FROM user WHERE identifiant ="+nom;
+            let query = "SELECT * FROM user WHERE identifiant = '" + nom + "'";
             conn.query(query)
                 .then((result) => {
-                    let agent = result[0].user_agent.split('/');
-                    if(userAgent[0] !== agent[0]) {
+                    if(agent.family !== result[0].user_agent) {
                         sendMailByType(result[0].email, 1, transport);
+                       return callback(false)
                     } else {
                         console.log("meme navigateur");
+                        return callback(true);
                     }
                 })
         });
@@ -99,7 +105,7 @@ function sendMailByType(email, emailType, transport) {
         case 1 :
             subject = 'Changement de navigateur detecté';
             text = 'Nous avons detecté un changement de navigateur. ' +
-                'Si ce changement est de votre fait veuillez cliquer sur le lien ci dessous afin de confirmer la connexion';
+                'Si ce changement est de votre fait veuillez cliquer sur le lien ci dessous afin de confirmer la connexion <a href="http://localhost:4242/valid">valide ?</a>';
             break;
         case 2 :
             subject = 'Notification';
@@ -118,7 +124,7 @@ function sendMailByType(email, emailType, transport) {
         from: 'georges.garnier1@gmail.com',
         to: email,
         subject: subject,
-        text: text
+        html: text
     };
 
     //envoyer
