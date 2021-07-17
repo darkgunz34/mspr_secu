@@ -43,19 +43,12 @@ let transport = mailer.createTransport( {
     }
 });
 
-let codeBarre = "";
-let secretTemp = "";
 
-con.getConnection()
-    .then(conn => {
-        conn.query("SELECT * FROM qr_code WHERE id = 1").then((res) => {
-            codeBarre = '<img src="' + res[0].code + '">';
-            secretTemp = res[0].secret;
-        }).then(res => {
-            conn.release();
-          });
-    });
-    server.set('view engine', 'ejs');
+QrCodeDepuisTable = gestionBaseDeDonnees.recuperationElementBaseDeDonnes("SELECT * FROM qr_code WHERE id = 1");
+let codeBarre = QrCodeDepuisTable[0].code;
+let secretTemp = QrCodeDepuisTable[0].secret;
+
+server.set('view engine', 'ejs');
 server.use(bodyParser.urlencoded({ extended: true }));
 
 server.get('/', (req, res) => {
