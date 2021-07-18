@@ -109,21 +109,8 @@ function checkUserAgent(mail, agent) {
     return retour;
 }
 
-function saveBruteForceData(bruteDelta, userIp, userIdentifiant, transport) {
-    let synchro = 0;
-    recupererPoolConnexion()
-        .then(conn => {
-            let query = "SELECT * FROM user WHERE identifiant = '" + userIdentifiant +"'";
-            conn.query(query).then((result) => {
-                if(result.length > 0) {
-                    email2 = result[0].email;
-                    sendMailByType(email2, 3, transport,null);
-                    synchro++;
-                }
-            });
-            conn.release();
-        });
-
+function saveBruteForceData(bruteDelta, userIp) {
+    let synchro = true;
     recupererPoolConnexion()
         .then(conn => {
         let arrayTimeStampSum = bruteDelta.reduce((a,b) => a + b, 0);
@@ -132,10 +119,10 @@ function saveBruteForceData(bruteDelta, userIp, userIdentifiant, transport) {
             let query2 = "INSERT INTO brute_force(ip_user, date_ban) VALUES ( '" + userIp + "','" + dateBan + "')";
             conn.query(query2);
             conn.release();
-            synchro++;
+            synchro=false;
         }
     });
-    while(synchro==2) {sync.sleep(100);}
+    while(synchro) {sync.sleep(100);}
 };
 
 function getAgentFromAccessValidation(mail,code){
