@@ -19,7 +19,7 @@
         <div class="d-flex justify-content-center" style="margin-top: 2em;">
             <form action="login" method="POST">
                 <div class="col">
-                    <input class="form-control" type="text" id="nom" name="nom" placeholder="Votre mot de passe">
+                    <input class="form-control" type="text" id="nom" name="nom" placeholder="Votre nom">
                 </div>
 
                 <div class="col">
@@ -34,6 +34,15 @@
         <h2 class="d-flex justify-content-right">QrCode pour l'authentification OTP</h2>
         <div><%- img -%></div>
     </div>
+    
+    <button class="btn btn-outline-info" onclick="redirect()">Saisir un code de dévérouillage ?</button>
+
+  <script>
+    function redirect(){
+      path = window.location.href + "/../valide";
+      window.location.assign(path); 
+    }
+    </script>
 </body>
 <footer>En cas de problème ou de question concernant le portail et l'utilisation des données, merci de vous adresser à l'adresse suivante : stephan.parichon@epsi.fr</footer>
 </html>

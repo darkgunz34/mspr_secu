@@ -3,28 +3,25 @@ const http = require('http');
 const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const express = require('express');
-const ldap = require('ldapjs');
+
 const fs = require('fs')
-const speakeasy = require('speakeasy');
 const mailer = require('nodemailer');
 const tools = require('./tools/tools.js');
+const gestionBaseDeDonnees = require('./tools/gestionBaseDeDonnees');
+const gestionLdap = require('./tools/gestionLdap');
+const gestionApi = require('./tools/gestionApi');
+const gestionAuthentification = require('./tools/gestionAuthentification');
 const session = require('express-session');
 const server = express();
+const serveurHttp = express();
 const useragent = require('useragent');
 
 let bruteTemp = [];
 let bruteDelta = [];
 let compteurBrutforce = 1;
-let mariadb = require('mariadb');
-let con = mariadb.createPool({
-    host: "192.168.1.33",
-    user: "serveur_web",
-    password: "Epsi#1234!",
-    database: "mspr_secu",
-    port:3307
-});
 
-//setup session
+
+/* Configuration Session */
 server.use(
     session({
     secret: 'mspr_secu',
@@ -33,7 +30,7 @@ server.use(
     })
 );
 
-//setup mail
+/* Configuration Mail */
 let transport = mailer.createTransport( {
     host: 'smtp.mailtrap.io',
     port: 2525,
@@ -43,21 +40,33 @@ let transport = mailer.createTransport( {
     }
 });
 
-let codeBarre = "";
-let secretTemp = "";
 
-con.getConnection()
-    .then(conn => {
-        conn.query("SELECT * FROM qr_code WHERE id = 1").then((res) => {
-            codeBarre = '<img src="' + res[0].code + '">';
-            secretTemp = res[0].secret;
-        }).then(res => {
-            conn.release();
-          });
-    });
-    server.set('view engine', 'ejs');
-server.use(bodyParser.urlencoded({ extended: true }));
 
+/* Configuration du serveur */
+server.set('view engine', 'ejs');
+server.use(express.static(__dirname + '/public'));
+server.use(bodyParser.urlencoded({ extended: true }));    
+
+https.createServer({
+    key: fs.readFileSync('server.key'),
+    cert: fs.readFileSync('server.cert')
+  }, server)
+  .listen(443, function () {
+    console.log('Serveur en HTTPS : UP');
+});
+
+serveurHttp.get("*", function(request, response){
+  response.redirect("https://" + request.headers.host + request.url);
+});
+serveurHttp.listen(80, () => console.log(`Serveur en HTTP : redirige vers HTTPS`));
+
+
+/* Préparation des données pour le QrCode*/
+QrCodeDepuisTable = gestionBaseDeDonnees.recuperationQrCode();
+let codeBarre = QrCodeDepuisTable.codeBarre;
+let secretTemp = QrCodeDepuisTable.secretTemp;
+
+/* Traitement des requêtes */
 server.get('/', (req, res) => {
     res.render('authentification', {img: codeBarre,message:""});
 });
@@ -66,65 +75,68 @@ server.get('/authentification/', (req, res) => {
     res.render('authentification', {img: codeBarre,message:""});
 });
 
+server.get('/valide',function(req,res){
+    res.render('valide');
+})
+
+server.get('/logout', function(req, res){
+    req.session.destroy();
+    res.render('authentification',{img: codeBarre,message:"Vous n'êtes plus connecter"});
+});
+
+
 server.post('/login', function(req, res){
     let userIp = req.ip;
     let nom = req.body.nom;
     let password = req.body.password;
-    let ban = tools.checkIfIpIsBan(con, userIp);
 
-    if(ban){
+    if(gestionBaseDeDonnees.checkIfIpIsBan(userIp)){
+        res.render('ban');
+    }
+    
+    if(compteurBrutforce > 5) {
+        tools.sendMailByType(mail, 3, transport,null);
+        gestionBaseDeDonnees.saveBruteForceData(bruteDelta, userIp)
         res.render('ban');
     }
 
-    let mail = authenticateDN("CN="+nom,password);
-
-    if(mail && mail !== "PAS DE MAIL"){
+    try {
+        champNonVide(password);
+        gestionLdap.controleLdap(nom,password);
+        let mail = gestionLdap.recupererMailLdap(nom,password);
         let agent = tools.recuperationAgentFromRequest(req,useragent);
-        console.log("test");
-
-        if(tools.checkUserAgent(mail,con,agent)){
+        if(gestionBaseDeDonnees.checkUserAgent(mail,agent)){
             req.session.password = password;
             req.session.nom = nom;
             res.render('check');
         }else{
             let date = new Date();
-            code = Math.random()*1000;
-            tools.enAttente(code,mail,date,agent,con);
+            code = Math.floor(Math.random()*1000);
+            gestionBaseDeDonnees.enAttente(code,mail,date,agent);
             tools.sendMailByType(mail, 1, transport,code);
-            tools.declarationChangementSupport(mail,agent,date,con);
+            gestionBaseDeDonnees.declarationNouveauSupport(mail,agent,date);
             res.render('wait');
-        };
+        }
     }
-
-    if(compteurBrutforce > 5) {
-          tools.saveBruteForceData(con, bruteDelta, userIp, nom, transport)
-          res.render('ban');
-    }if(mail === "PAS DE MAIL"){
-        res.render('authentification',{img: codeBarre,message:"Votre compte n'est pas paramétrer. Contactez l'administrateur."});
+    catch (messageErreur) {
+        let timeStamp = new Date();
+        bruteTemp.push(timeStamp);
+        compteurBrutforce++;
+        console.log("start");
+        res.render('authentification',{img: codeBarre,message:messageErreur});
     }
-    else {
-          let timeStamp = new Date();
-          bruteTemp.push(timeStamp);
-          res.render('authentification',{img: codeBarre,message:"Mot de passe ou nom de compte invalide"});
-      }
 });
-
-server.get('/valide',function(req,res){
-    res.render('valide');
-})
 
 //Après envoie de mail
 server.post('/valide', function(req, res) {
     let code = req.body.code;
     let mail = req.body.mail;
-    console.log("code : " + code);
-    console.log("mail : " + mail);
+
     if(mail && code){
-        if(tools.checkValide(con,mail,code)){
-            let agent = tools.getAgentFromAccessValidation(con,mail,code);
-            console.log("agent : " + agent);
-            tools.updateAccess(con,mail,agent);
-            res.render('authentification',{img: codeBarre,message:"Vous pouvez maintenant vous reconnecter"});
+        if(gestionBaseDeDonnees.controleAccess(mail,code)){
+            let agent = gestionBaseDeDonnees.getAgentFromAccessValidation(mail,code);
+            gestionBaseDeDonnees.updateAccess(mail,agent);
+            res.render('authentification',{img: codeBarre,message:"Vous pouvez maintenant vous connecter avec votre nouveau navigateur"});
         }
     }
     res.render('authentification',{img: codeBarre,message:"Impossible de réaliser la mise à jour"});
@@ -132,79 +144,26 @@ server.post('/valide', function(req, res) {
 
 
 server.post('/check', function(req, res) {
-    let code = req.body.code; // récupération du code depuis l'authentification Google
-    let verified = speakeasy.totp.verify({
-        secret : secretTemp,
-        encoding: 'base32',
-        token: code
-    });
-    
-    //Récupération des données depuis la session
-    let password = req.session.password;
-    let nom = req.session.nom;
+    let code = req.body.code;
+    let verified = gestionAuthentification.checkCodeGoogle(code,secretTemp);
 
-    // verification
-    let corrompu = tools.check_password_api(password,crypto,https);
-    
-    if(verified) {
+    console.log(verified);
+
+    if(verified){
+        //Récupération des données depuis la session
+        let password = req.session.password;
+        console.log(password);
+
+        // verification
+        let corrompu = gestionApi.check_password_api(password,crypto,https);
         res.render('login',{corrompu:corrompu});
-    }else{
-        res.render('authentification',{img: codeBarre,message:""});
     }
+
+    res.render('authentification',{img: codeBarre,message:""});
 })
 
-server.get('/logout', function(req, res){
-    console.log("test");
-    req.session.destroy();
-    res.render('authentification',{img: codeBarre,message:""});
-});
-
-server.use(express.static(__dirname + '/public'));
-
-/* START SERVEUR*/
-https.createServer({
-    key: fs.readFileSync('server.key'),
-    cert: fs.readFileSync('server.cert')
-  }, server)
-  .listen(443, function () {
-    console.log('Express Server is running... https://localhost:443/');
-});
-
-//Forcé la redirection
-const httpApp = express();
-httpApp.get("*", function(request, response){
-  response.redirect("https://" + request.headers.host + request.url);
-});
-httpApp.listen(80, () => console.log(`HTTP server listening: http://localhost:80`));
-
-function authenticateDN(username,password){
-    let sufix = "DC=chateletmspr,DC=ovh";
-    let sync = true;
-    let valeur_retour = false;
-    let client = ldap.createClient({
-        url: "ldap://192.168.1.33:389"
-    });
-    if(!password){
-        password = " ";
+function champNonVide(champ){
+    if(!champ){
+        throw "Merci de saisir l'ensemble des champs";
     }
-
-    let appelBind = username + ",CN=Users," + sufix;
-    client.bind(appelBind,password,function(err){
-        if(!err){
-            client.search(sufix,{ filter: "("+username+")",attributes: ['dn', 'sn', 'cn',"mail",],scope: 'sub',},(err,res) => {
-                res.on('searchEntry', function(entry) {
-                    mail = JSON.stringify(entry.object.mail);
-                    if(mail){
-                        valeur_retour = mail.replace('"','').replace('"','');
-                    }else{
-                        valeur_retour="PAS DE MAIL";
-                    }
-                });
-            });
-        }
-        sync = false;
-    });
-    console.log("ldpa");
-    while(sync) {require('deasync').sleep(100);}
-    return valeur_retour;
-};
+}
