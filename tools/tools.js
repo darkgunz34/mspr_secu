@@ -21,7 +21,7 @@ function sendMailByType(email, emailType, transport,code) {
     }
 
     const message = {
-        from: 'georges.garnier1@gmail.com',
+        from: 'noreply@portail.com',
         to: email,
         subject: subject,
         text: text

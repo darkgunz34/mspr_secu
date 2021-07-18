@@ -110,7 +110,7 @@ server.post('/login', function(req, res){
             res.render('check');
         }else{
             let date = new Date();
-            code = Math.random()*1000;
+            code = Math.floor(Math.random()*1000);
             gestionBaseDeDonnees.enAttente(code,mail,date,agent);
             tools.sendMailByType(mail, 1, transport,code);
             gestionBaseDeDonnees.declarationNouveauSupport(mail,agent,date);
@@ -146,17 +146,19 @@ server.post('/check', function(req, res) {
     let code = req.body.code;
     let verified = gestionAuthentification.checkCodeGoogle(code,secretTemp);
 
-    //Récupération des données depuis la session
-    let password = req.session.password;
+    console.log(verified);
 
-    // verification
-    let corrompu = gestionApi.check_password_api(password,crypto,https);
-    
-    if(corrompu) {
+    if(verified){
+        //Récupération des données depuis la session
+        let password = req.session.password;
+        console.log(password);
+
+        // verification
+        let corrompu = gestionApi.check_password_api(password,crypto,https);
         res.render('login',{corrompu:corrompu});
-    }else{
-        res.render('authentification',{img: codeBarre,message:""});
     }
+
+    res.render('authentification',{img: codeBarre,message:""});
 })
 
 function champNonVide(champ){
