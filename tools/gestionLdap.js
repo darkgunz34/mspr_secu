@@ -12,6 +12,7 @@ function controleLdap(username,password){
     let appelBind = "CN="+username + ",CN=Users," + sufix;
     client.bind(appelBind,password,function(err){
         if(err){
+            console.log("ok");
             throw "Aucun compte n'est associé à cette utilisateur avec ce mot de passe";
         }
         synchro = false;
