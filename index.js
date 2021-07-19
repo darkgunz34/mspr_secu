@@ -95,27 +95,29 @@ server.post('/login', function(req, res){
     }
     
     if(compteurBrutforce > 5) {
-        tools.sendMailByType(mail, 3, transport,null);
+        tools.sendMailByType(null, 3, transport,null);
         gestionBaseDeDonnees.saveBruteForceData(bruteDelta, userIp)
         res.render('ban');
+        compteurBrutforce = 1;
     }
 
     try {
-        champNonVide(password);
-        gestionLdap.controleLdap(nom,password);
-        let mail = gestionLdap.recupererMailLdap(nom,password);
-        let agent = tools.recuperationAgentFromRequest(req,useragent);
-        if(gestionBaseDeDonnees.checkUserAgent(mail,agent)){
-            req.session.password = password;
-            req.session.nom = nom;
-            res.render('check');
-        }else{
-            let date = new Date();
-            code = Math.floor(Math.random()*1000);
-            gestionBaseDeDonnees.enAttente(code,mail,date,agent);
-            tools.sendMailByType(mail, 1, transport,code);
-            gestionBaseDeDonnees.declarationNouveauSupport(mail,agent,date);
-            res.render('wait');
+        if(champNonVide(nom) && champNonVide(password)){
+            gestionLdap.controleLdap(nom,password);
+            let mail = gestionLdap.recupererMailLdap(nom,password);
+            let agent = tools.recuperationAgentFromRequest(req,useragent);
+            if(gestionBaseDeDonnees.checkUserAgent(mail,agent)){
+                req.session.password = password;
+                req.session.nom = nom;
+                res.render('check');
+            }else{
+                let date = new Date();
+                code = Math.floor(Math.random()*1000);
+                gestionBaseDeDonnees.enAttente(code,mail,date,agent);
+                tools.sendMailByType(mail, 1, transport,code);
+                gestionBaseDeDonnees.declarationNouveauSupport(mail,agent,date);
+                res.render('wait');
+            }
         }
     }
     catch (messageErreur) {
@@ -166,4 +168,5 @@ function champNonVide(champ){
     if(!champ){
         throw "Merci de saisir l'ensemble des champs";
     }
+    return true;
 }
